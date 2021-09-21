@@ -1,0 +1,128 @@
+build_exchange = false
+display_gui = true
+
+Vagrant.configure("2") do |config|
+  config.vm.define "dc" do |cfg|
+    cfg.vm.box = "windows_2016"
+    cfg.vm.hostname = "dc"
+    cfg.vm.boot_timeout = 600
+    cfg.winrm.transport = :plaintext
+    cfg.vm.communicator = "winrm"
+    cfg.winrm.basic_auth_only = true
+    cfg.winrm.timeout = 300
+    cfg.winrm.retry_limit = 20
+    cfg.vm.network :private_network, ip: "192.168.38.102", gateway: "192.168.38.1", dns: "8.8.8.8"
+
+    cfg.vm.synced_folder "../src/AmsiLoggingProvider", "/src/AmsiLoggingProvider"
+
+    cfg.vm.provision "shell", path: "scripts/fix-second-network.ps1",
+                              privileged: true,
+                              args: "-ip 192.168.38.102 -dns 8.8.8.8 -gateway 192.168.38.1" 
+     cfg.vm.provision "shell", path: "scripts/provision.ps1", privileged: false
+     cfg.vm.provision "reload"
+     cfg.vm.provision "shell", path: "scripts/provision.ps1", privileged: false
+     cfg.vm.provision "shell", path: "scripts/configure-ou.ps1", privileged: false
+     cfg.vm.provision "shell", path: "scripts/configure-wef-gpo.ps1", privileged: false
+     cfg.vm.provision "shell", path: "scripts/configure-powershelllogging.ps1", privileged: false
+     cfg.vm.provision "shell", path: "scripts/configure-AuditingPolicyGPOs.ps1", privileged: false
+     cfg.vm.provision "shell", inline: 'wevtutil el | Select-String -notmatch "Microsoft-Windows-LiveId" | Foreach-Object {wevtutil cl "$_"}', privileged: false
+     cfg.vm.provision "shell", inline: "Set-SmbServerConfiguration -AuditSmb1Access $true -Force", privileged: false
+     cfg.vm.provision "shell", inline: 'cscript c:\windows\system32\slmgr.vbs /dlv', privileged: false
+
+    cfg.vm.provider "vmware_desktop" do |v, override|
+      v.vmx["displayname"] = "dc.windomain.local"
+      # v.vmx["ethernet1.pcislotnumber"] = "33"
+      v.memory = 4096
+      v.cpus = 2
+      v.gui = display_gui
+      v.enable_vmrun_ip_lookup = false
+    end
+
+    cfg.vm.provider "parallels" do |prl|
+      prl.name = "dc.windomain.local"
+      prl.memory = 4096
+      prl.cpus = 2
+      prl.linked_clone = true
+    end
+  end
+
+  config.vm.define "wef" do |cfg|
+    cfg.vm.box = "windows_2016"
+    cfg.vm.hostname = "wef"
+    cfg.vm.boot_timeout = 600
+    cfg.vm.communicator = "winrm"
+    cfg.winrm.basic_auth_only = true
+    cfg.winrm.timeout = 300
+    cfg.winrm.retry_limit = 20
+
+    cfg.vm.network :private_network, ip: "192.168.38.103", gateway: "192.168.38.1", dns: "192.168.38.102"
+
+    cfg.vm.synced_folder "../src/AmsiLoggingProvider", "/src/AmsiLoggingProvider"
+
+    cfg.vm.provision "shell", path: "scripts/fix-second-network.ps1", privileged: true, args: "-ip 192.168.38.103 -dns 8.8.8.8 -gateway 192.168.38.1" 
+    cfg.vm.provision "shell", path: "scripts/provision.ps1", privileged: false
+    cfg.vm.provision "reload"
+    cfg.vm.provision "shell", path: "scripts/provision.ps1", privileged: false
+    cfg.vm.provision "shell", path: "scripts/download_palantir_wef.ps1", privileged: false
+    cfg.vm.provision "shell", inline: 'wevtutil el | Select-String -notmatch "Microsoft-Windows-LiveId" | Foreach-Object {wevtutil cl "$_"}', privileged: false
+    cfg.vm.provision "shell", path: "scripts/install-wefsubscriptions.ps1", privileged: false
+    cfg.vm.provision "shell", path: "scripts/configure-pslogstranscriptsshare.ps1", privileged: false
+    cfg.vm.provision "shell", inline: "Set-SmbServerConfiguration -AuditSmb1Access $true -Force", privileged: false
+    cfg.vm.provision "shell", inline: 'cscript c:\windows\system32\slmgr.vbs /dlv', privileged: false
+
+    cfg.vm.provider "vmware_desktop" do |v, override|
+      v.vmx["displayname"] = "wef.windomain.local"
+      v.memory = 4096
+      v.cpus = 2
+      v.gui = display_gui
+      v.enable_vmrun_ip_lookup = false
+    end
+
+    cfg.vm.provider "parallels" do |prl|
+      prl.name = "wef.windomain.local"
+      prl.memory = 4096
+      prl.cpus = 2
+      prl.linked_clone = true
+    end
+  end
+
+  config.vm.define "win10" do |cfg|
+    cfg.vm.box = "windows_10"
+    cfg.vm.hostname = "win10"
+    cfg.vm.boot_timeout = 1200
+    cfg.vm.communicator = "winrm"
+    cfg.winrm.basic_auth_only = true
+    cfg.winrm.timeout = 1200
+    cfg.winrm.retry_limit = 20
+
+    cfg.vm.network :private_network, ip: "192.168.38.104", gateway: "192.168.38.1", dns: "192.168.38.102"
+
+    cfg.vm.synced_folder "../src/AmsiLoggingProvider", "/src/AmsiLoggingProvider"
+
+    cfg.vm.provision "shell", path: "scripts/fix-second-network.ps1", privileged: false, args: "-ip 192.168.38.104 -dns 8.8.8.8 -gateway 192.168.38.1" 
+    cfg.vm.provision "shell", path: "scripts/provision.ps1", privileged: false
+    cfg.vm.provision "reload"
+    cfg.vm.provision "shell", path: "scripts/provision.ps1", privileged: false
+    cfg.vm.provision "shell", path: "scripts/download_palantir_wef.ps1", privileged: false
+    cfg.vm.provision "shell", inline: 'wevtutil el | Select-String -notmatch "Microsoft-Windows-LiveId" | Foreach-Object {wevtutil cl "$_"}', privileged: false
+    cfg.vm.provision "shell", inline: 'cscript c:\windows\system32\slmgr.vbs /dlv', privileged: false
+
+    cfg.vm.provider "vmware_desktop" do |v, override|
+      v.vmx["displayname"] = "win10.windomain.local"
+      v.vmx["gui.fullscreenatpoweron"] = "FALSE"
+      v.vmx["gui.viewModeAtPowerOn"] = "windowed"
+      v.memory = 4096
+      v.cpus = 2
+      v.gui = display_gui
+      v.enable_vmrun_ip_lookup = false
+    end
+
+    cfg.vm.provider "parallels" do |prl|
+      prl.name = "win10.windomain.local"
+      prl.memory = 4096
+      prl.cpus = 2
+      prl.linked_clone = true
+    end
+
+  end
+end
