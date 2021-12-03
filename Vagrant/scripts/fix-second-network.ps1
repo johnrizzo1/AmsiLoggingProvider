@@ -3,12 +3,14 @@ param ([String] $ip, [String] $dns, [String] $gateway)
 
 Write-Host "$('[{0:HH:mm}]' -f (Get-Date)) Running fix-second-network.ps1..."
 
-if ( (Get-NetAdapter | Select-Object -First 1 | Select-Object -ExpandProperty InterfaceDescription).Contains('Red Hat VirtIO')) {
-  Write-Host "$('[{0:HH:mm}]' -f (Get-Date)) Setting Network Configuration for LibVirt interface"
+# Removed since we are using parallels, will delete if it doesn't break anything else.
+# if ( (Get-NetAdapter | Select-Object -First 1 | Select-Object -ExpandProperty InterfaceDescription).Contains('Red Hat VirtIO')) {
+if ( (Get-NetAdapter | Select-Object -First 1 | Select-Object -ExpandProperty InterfaceDescription).Contains('VirtIO')) {
+  Write-Host "$('[{0:HH:mm}]' -f (Get-Date)) Setting Network Configuration for VirtIO interface"
   $subnet = $ip -replace "\.\d+$", ""
   $name = (Get-NetIPAddress -AddressFamily IPv4 `
-     | Where-Object -FilterScript { ($_.IPAddress).StartsWith("$subnet") } `
-     ).InterfaceAlias
+      | Where-Object -FilterScript { ($_.IPAddress).StartsWith("$subnet") } `
+    ).InterfaceAlias
   if ($name) {
     Write-Host "$('[{0:HH:mm}]' -f (Get-Date)) Set IP address to $ip of interface $name"
     & netsh.exe int ip set address "$name" static $ip 255.255.255.0 "$gateway"
@@ -36,12 +38,12 @@ Write-Host "See https://github.com/clong/DetectionLab/issues/114 for more inform
 
 $subnet = $ip -replace "\.\d+$", ""
 $name = (Get-NetIPAddress -AddressFamily IPv4 `
-   | Where-Object -FilterScript { ($_.IPAddress).StartsWith($subnet) } `
-   ).InterfaceAlias
+    | Where-Object -FilterScript { ($_.IPAddress).StartsWith($subnet) } `
+  ).InterfaceAlias
 if (!$name) {
   $name = (Get-NetIPAddress -AddressFamily IPv4 `
-     | Where-Object -FilterScript { ($_.IPAddress).StartsWith("169.254.") } `
-     ).InterfaceAlias
+      | Where-Object -FilterScript { ($_.IPAddress).StartsWith("169.254.") } `
+    ).InterfaceAlias
 }
 if ($name) {
   Write-Host "$('[{0:HH:mm}]' -f (Get-Date)) Set IP address to $ip of interface $name"
